@@ -1,0 +1,857 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                     String         @id @default(uuid())
+  name                   String
+  logo                   String?
+  address                String?
+  phone                  String?
+  email                  String?
+  gstNumber              String?
+  panNumber              String?
+  website                String?
+  industry               String?
+  currency               String         @default("INR")
+  financialYearStart     Int            @default(4)
+  procurementHealthScore Decimal?       @db.Decimal(5, 2)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  approvalRules          ApprovalRule[]
+  departments            Department[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                  String          @id @default(uuid())
+  firstName           String
+  lastName            String
+  username            String          @unique
+  email               String          @unique
+  passwordHash        String
+  phone               String?
+  dateOfBirth         DateTime?
+  gender              Gender?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  state               String?
+  pincode             String?
+  country             String?         @default("India")
+  avatarUrl           String?
+  bio                 String?
+  role                UserRole
+  isActive            Boolean         @default(true)
+  isEmailVerified     Boolean         @default(false)
+  lastLoginAt         DateTime?
+  loginCount          Int             @default(0)
+  refreshToken        String?
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  activityLogs        ActivityLog[]
+  approvalsGiven      Approval[]      @relation("ApproverUser")
+  employee            Employee?
+  goodsReceipts       GoodsReceipt[]  @relation("ReceivedByUser")
+  invoicesApproved    Invoice[]       @relation("ApprovedByUser")
+  invoicesSubmitted   Invoice[]       @relation("SubmittedByUser")
+  notifications       Notification[]
+  paymentsProcessed   Payment[]       @relation("ProcessedByUser")
+  prAttachments       PRAttachment[]
+  posIssued           PurchaseOrder[] @relation("IssuedByUser")
+  rfqAttachments      RFQAttachment[]
+  rfqsCreated         RFQ[]           @relation("CreatedByUser")
+  risksResolved       RiskAlert[]     @relation("ResolvedByUser")
+  vendorsApproved     Vendor[]        @relation("ApprovedByUser")
+  vendor              Vendor?
+
+  @@map("users")
+}
+
+model Employee {
+  id                 String            @id @default(uuid())
+  userId             String            @unique
+  employeeId         String            @unique
+  departmentId       String
+  designation        String
+  reportingManagerId String?
+  joiningDate        DateTime          @default(now())
+  employeeType       EmployeeType      @default(FULL_TIME)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  departmentHead     Department[]      @relation("DepartmentHead")
+  department         Department        @relation(fields: [departmentId], references: [id])
+  reportingManager   Employee?         @relation("ManagerReports", fields: [reportingManagerId], references: [id])
+  directReports      Employee[]        @relation("ManagerReports")
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchaseRequests   PurchaseRequest[]
+
+  @@index([userId])
+  @@index([departmentId])
+  @@index([reportingManagerId])
+  @@map("employees")
+}
+
+model Department {
+  id               String            @id @default(uuid())
+  name             String            @unique
+  code             String            @unique
+  headId           String?
+  budget           Decimal?          @db.Decimal(15, 2)
+  organizationId   String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  head             Employee?         @relation("DepartmentHead", fields: [headId], references: [id])
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  employees        Employee[]
+  purchaseRequests PurchaseRequest[]
+
+  @@map("departments")
+}
+
+model Vendor {
+  id                String              @id @default(uuid())
+  userId            String              @unique
+  vendorCode        String              @unique
+  companyName       String
+  tradeName         String?
+  gstNumber         String?
+  panNumber         String?
+  cinNumber         String?
+  category          VendorCategory
+  subCategory       String?
+  contactPerson     String
+  contactEmail      String
+  contactPhone      String
+  website           String?
+  addressLine1      String
+  addressLine2      String?
+  city              String
+  state             String
+  pincode           String
+  country           String              @default("India")
+  bankName          String?
+  bankAccountNumber String?
+  bankIfscCode      String?
+  bankBranch        String?
+  annualTurnover    Decimal?            @db.Decimal(15, 2)
+  employeeCount     Int?
+  yearEstablished   Int?
+  certifications    String[]
+  description       String?
+  logoUrl           String?
+  isActive          Boolean             @default(true)
+  isBlacklisted     Boolean             @default(false)
+  blacklistReason   String?
+  registrationDate  DateTime            @default(now())
+  approvedById      String?
+  approvedAt        DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  analyticsTop      AnalyticsSnapshot[] @relation("TopVendor")
+  goodsReceipts     GoodsReceipt[]
+  invoices          Invoice[]
+  payments          Payment[]
+  purchaseOrders    PurchaseOrder[]
+  suggestedForPRs   PurchaseRequest[]   @relation("SuggestedVendor")
+  quotations        Quotation[]
+  rfqMappings       RFQVendorMapping[]
+  riskAlerts        RiskAlert[]
+  score             VendorScore?
+  approvedBy        User?               @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([isActive])
+  @@map("vendors")
+}
+
+model VendorScore {
+  id                   String   @id @default(uuid())
+  vendorId             String   @unique
+  trustScore           Decimal  @db.Decimal(5, 2)
+  onTimeDeliveryRate   Decimal  @db.Decimal(5, 2)
+  qualityScore         Decimal  @db.Decimal(5, 2)
+  priceCompetitiveness Decimal  @db.Decimal(5, 2)
+  complaintRate        Decimal  @db.Decimal(5, 2)
+  invoiceAccuracy      Decimal  @db.Decimal(5, 2)
+  responseTime         Decimal  @db.Decimal(7, 2)
+  orderCompletionRate  Decimal  @db.Decimal(5, 2)
+  communicationScore   Decimal  @db.Decimal(5, 2)
+  totalOrders          Int      @default(0)
+  totalOrderValue      Decimal  @default(0) @db.Decimal(15, 2)
+  avgDeliveryDays      Decimal  @db.Decimal(5, 2)
+  lastEvaluatedAt      DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  vendor               Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_scores")
+}
+
+model PurchaseRequest {
+  id                    String          @id @default(uuid())
+  prNumber              String          @unique
+  title                 String
+  description           String
+  departmentId          String
+  requestedById         String
+  category              String
+  quantity              Int
+  unitOfMeasure         String          @default("pcs")
+  estimatedUnitPrice    Decimal?        @db.Decimal(15, 2)
+  estimatedBudget       Decimal         @db.Decimal(15, 2)
+  currency              String          @default("INR")
+  priority              Priority        @default(MEDIUM)
+  requiredByDate        DateTime
+  justification         String?
+  specifications        String?
+  suggestedVendorId     String?
+  status                PRStatus        @default(DRAFT)
+  currentApprovalLevel  Int             @default(1)
+  rejectionReason       String?
+  clarificationNote     String?
+  clarificationResponse String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  approvals             Approval[]
+  attachments           PRAttachment[]
+  purchaseOrders        PurchaseOrder[]
+  department            Department      @relation(fields: [departmentId], references: [id])
+  requestedBy           Employee        @relation(fields: [requestedById], references: [id])
+  suggestedVendor       Vendor?         @relation("SuggestedVendor", fields: [suggestedVendorId], references: [id])
+  rfqs                  RFQ[]
+
+  @@index([departmentId])
+  @@index([requestedById])
+  @@index([status])
+  @@index([suggestedVendorId])
+  @@map("purchase_requests")
+}
+
+model PRAttachment {
+  id                String          @id @default(uuid())
+  purchaseRequestId String
+  fileName          String
+  fileUrl           String
+  fileSize          Int
+  mimeType          String
+  uploadedById      String
+  createdAt         DateTime        @default(now())
+  purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  uploadedBy        User            @relation(fields: [uploadedById], references: [id])
+
+  @@map("pr_attachments")
+}
+
+model ApprovalRule {
+  id             String       @id @default(uuid())
+  organizationId String
+  level          Int
+  minAmount      Decimal      @db.Decimal(15, 2)
+  maxAmount      Decimal?     @db.Decimal(15, 2)
+  approverRole   UserRole
+  description    String
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("approval_rules")
+}
+
+model Approval {
+  id                   String           @id @default(uuid())
+  purchaseRequestId    String?
+  vendorSelectionRfqId String?
+  approvalType         ApprovalType
+  approverId           String
+  approvalLevel        Int
+  status               ApprovalStatus   @default(PENDING)
+  remarks              String?
+  aiSummary            String?
+  aiRecommendation     String?
+  decidedAt            DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  approver             User             @relation("ApproverUser", fields: [approverId], references: [id])
+  purchaseRequest      PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+
+  @@index([purchaseRequestId])
+  @@index([vendorSelectionRfqId])
+  @@index([approverId])
+  @@index([status])
+  @@map("approvals")
+}
+
+model RFQ {
+  id                 String             @id @default(uuid())
+  rfqNumber          String             @unique
+  purchaseRequestId  String
+  title              String
+  description        String
+  quantity           Int
+  unitOfMeasure      String             @default("pcs")
+  estimatedBudget    Decimal            @db.Decimal(15, 2)
+  currency           String             @default("INR")
+  priority           Priority           @default(MEDIUM)
+  deadline           DateTime
+  termsAndConditions String?
+  deliveryAddress    String?
+  evaluationCriteria String?
+  status             RFQStatus          @default(DRAFT)
+  createdById        String
+  publishedAt        DateTime?
+  closedAt           DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  purchaseOrders     PurchaseOrder[]
+  quotations         Quotation[]
+  attachments        RFQAttachment[]
+  vendorMappings     RFQVendorMapping[]
+  createdBy          User               @relation("CreatedByUser", fields: [createdById], references: [id])
+  purchaseRequest    PurchaseRequest    @relation(fields: [purchaseRequestId], references: [id])
+
+  @@index([purchaseRequestId])
+  @@index([createdById])
+  @@index([status])
+  @@map("rfqs")
+}
+
+model RFQAttachment {
+  id           String   @id @default(uuid())
+  rfqId        String
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  mimeType     String
+  uploadedById String
+  createdAt    DateTime @default(now())
+  rfq          RFQ      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@map("rfq_attachments")
+}
+
+model RFQVendorMapping {
+  id            String          @id @default(uuid())
+  rfqId         String
+  vendorId      String
+  invitedAt     DateTime        @default(now())
+  viewedAt      DateTime?
+  status        RFQVendorStatus @default(INVITED)
+  declineReason String?
+  isSelected    Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  quotation     Quotation?
+  rfq           RFQ             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendor        Vendor          @relation(fields: [vendorId], references: [id])
+
+  @@unique([rfqId, vendorId])
+  @@map("rfq_vendor_mapping")
+}
+
+model Quotation {
+  id                  String           @id @default(uuid())
+  quotationNumber     String           @unique
+  rfqVendorMappingId  String           @unique
+  rfqId               String
+  vendorId            String
+  unitPrice           Decimal          @db.Decimal(15, 2)
+  totalPrice          Decimal          @db.Decimal(15, 2)
+  taxPercentage       Decimal          @db.Decimal(5, 2)
+  taxAmount           Decimal          @db.Decimal(15, 2)
+  grandTotal          Decimal          @db.Decimal(15, 2)
+  deliveryDays        Int
+  deliveryDate        DateTime?
+  warrantyMonths      Int?
+  warrantyDetails     String?
+  supportDetails      String?
+  paymentTerms        String?
+  validityDays        Int              @default(30)
+  notes               String?
+  technicalCompliance Boolean?
+  isAiRecommended     Boolean          @default(false)
+  aiScore             Decimal?         @db.Decimal(5, 2)
+  aiReasoning         String?
+  status              QuotationStatus  @default(DRAFT)
+  submittedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  purchaseOrders      PurchaseOrder[]
+  rfq                 RFQ              @relation(fields: [rfqId], references: [id])
+  rfqVendorMapping    RFQVendorMapping @relation(fields: [rfqVendorMappingId], references: [id])
+  vendor              Vendor           @relation(fields: [vendorId], references: [id])
+
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([isAiRecommended])
+  @@map("quotations")
+}
+
+model PurchaseOrder {
+  id                 String          @id @default(uuid())
+  poNumber           String          @unique
+  purchaseRequestId  String
+  rfqId              String
+  quotationId        String
+  vendorId           String
+  subtotal           Decimal         @db.Decimal(15, 2)
+  taxPercentage      Decimal         @db.Decimal(5, 2)
+  taxAmount          Decimal         @db.Decimal(15, 2)
+  grandTotal         Decimal         @db.Decimal(15, 2)
+  currency           String          @default("INR")
+  deliveryDate       DateTime
+  deliveryAddress    String
+  paymentTerms       String
+  termsAndConditions String?
+  status             POStatus        @default(DRAFT)
+  issuedById         String
+  issuedAt           DateTime?
+  acknowledgedAt     DateTime?
+  pdfUrl             String?
+  emailSentAt        DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  goodsReceipts      GoodsReceipt[]
+  invoices           Invoice[]
+  lineItems          POLineItem[]
+  issuedBy           User            @relation("IssuedByUser", fields: [issuedById], references: [id])
+  purchaseRequest    PurchaseRequest @relation(fields: [purchaseRequestId], references: [id])
+  quotation          Quotation       @relation(fields: [quotationId], references: [id])
+  rfq                RFQ             @relation(fields: [rfqId], references: [id])
+  vendor             Vendor          @relation(fields: [vendorId], references: [id])
+
+  @@index([purchaseRequestId])
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([issuedById])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model POLineItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  itemNumber      Int
+  description     String
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(15, 2)
+  totalPrice      Decimal       @db.Decimal(15, 2)
+  unitOfMeasure   String        @default("pcs")
+  hsnCode         String?
+  createdAt       DateTime      @default(now())
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@map("po_line_items")
+}
+
+model GoodsReceipt {
+  id               String         @id @default(uuid())
+  grnNumber        String         @unique
+  purchaseOrderId  String
+  vendorId         String
+  receivedById     String
+  receivedDate     DateTime
+  quantityOrdered  Int
+  quantityReceived Int
+  quantityAccepted Int
+  quantityRejected Int            @default(0)
+  condition        GoodsCondition @default(GOOD)
+  inspectionNotes  String?
+  status           GRStatus       @default(RECEIVED)
+  rejectionReason  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  purchaseOrder    PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id])
+  receivedBy       User           @relation("ReceivedByUser", fields: [receivedById], references: [id])
+  vendor           Vendor         @relation(fields: [vendorId], references: [id])
+  threeWayMatch    ThreeWayMatch?
+
+  @@map("goods_receipts")
+}
+
+model Invoice {
+  id                  String         @id @default(uuid())
+  invoiceNumber       String         @unique
+  vendorInvoiceNumber String?
+  purchaseOrderId     String
+  vendorId            String
+  invoiceDate         DateTime
+  dueDate             DateTime
+  subtotal            Decimal        @db.Decimal(15, 2)
+  cgstAmount          Decimal?       @db.Decimal(15, 2)
+  sgstAmount          Decimal?       @db.Decimal(15, 2)
+  igstAmount          Decimal?       @db.Decimal(15, 2)
+  totalTax            Decimal        @db.Decimal(15, 2)
+  grandTotal          Decimal        @db.Decimal(15, 2)
+  currency            String         @default("INR")
+  status              InvoiceStatus  @default(DRAFT)
+  submittedById       String
+  approvedById        String?
+  pdfUrl              String?
+  vendorPdfUrl        String?
+  notes               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  approvedBy          User?          @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  purchaseOrder       PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id])
+  submittedBy         User           @relation("SubmittedByUser", fields: [submittedById], references: [id])
+  vendor              Vendor         @relation(fields: [vendorId], references: [id])
+  payment             Payment?
+  threeWayMatch       ThreeWayMatch?
+
+  @@index([purchaseOrderId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model ThreeWayMatch {
+  id               String       @id @default(uuid())
+  invoiceId        String       @unique
+  purchaseOrderId  String
+  goodsReceiptId   String       @unique
+  quantityMatch    Boolean
+  priceMatch       Boolean
+  taxMatch         Boolean
+  overallStatus    MatchStatus
+  quantityVariance Decimal?     @db.Decimal(15, 2)
+  priceVariance    Decimal?     @db.Decimal(15, 2)
+  taxVariance      Decimal?     @db.Decimal(15, 2)
+  notes            String?
+  verifiedById     String
+  verifiedAt       DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+  goodsReceipt     GoodsReceipt @relation(fields: [goodsReceiptId], references: [id])
+  invoice          Invoice      @relation(fields: [invoiceId], references: [id])
+
+  @@map("three_way_matches")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  paymentNumber   String        @unique
+  invoiceId       String        @unique
+  vendorId        String
+  amount          Decimal       @db.Decimal(15, 2)
+  currency        String        @default("INR")
+  paymentMethod   PaymentMethod @default(BANK_TRANSFER)
+  paymentDate     DateTime
+  referenceNumber String?
+  status          PaymentStatus @default(PENDING)
+  remarks         String?
+  processedById   String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  invoice         Invoice       @relation(fields: [invoiceId], references: [id])
+  processedBy     User          @relation("ProcessedByUser", fields: [processedById], references: [id])
+  vendor          Vendor        @relation(fields: [vendorId], references: [id])
+
+  @@map("payments")
+}
+
+model Notification {
+  id            String               @id @default(uuid())
+  userId        String
+  title         String
+  message       String
+  type          NotificationType     @default(INFO)
+  referenceType String?
+  referenceId   String?
+  isRead        Boolean              @default(false)
+  readAt        DateTime?
+  priority      NotificationPriority @default(MEDIUM)
+  createdAt     DateTime             @default(now())
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id          String         @id @default(uuid())
+  userId      String
+  action      ActivityAction
+  entityType  String
+  entityId    String?
+  description String
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
+
+model RiskAlert {
+  id              String       @id @default(uuid())
+  type            RiskType
+  severity        RiskSeverity
+  title           String
+  description     String
+  vendorId        String?
+  referenceType   String?
+  referenceId     String?
+  aiConfidence    Decimal?     @db.Decimal(5, 2)
+  status          RiskStatus   @default(ACTIVE)
+  resolvedById    String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  resolvedBy      User?        @relation("ResolvedByUser", fields: [resolvedById], references: [id])
+  vendor          Vendor?      @relation(fields: [vendorId], references: [id])
+
+  @@map("risk_alerts")
+}
+
+model AnalyticsSnapshot {
+  id                     String   @id @default(uuid())
+  snapshotDate           DateTime @unique
+  totalVendors           Int
+  totalPRs               Int
+  pendingApprovals       Int
+  activeRFQs             Int
+  totalSpend             Decimal  @db.Decimal(15, 2)
+  avgCycleTimeDays       Decimal  @db.Decimal(7, 2)
+  approvalSpeedHours     Decimal  @db.Decimal(7, 2)
+  vendorReliabilityScore Decimal  @db.Decimal(5, 2)
+  procurementHealthScore Decimal  @db.Decimal(5, 2)
+  topVendorId            String?
+  departmentSpendJson    Json?
+  categorySpendJson      Json?
+  createdAt              DateTime @default(now())
+  topVendor              Vendor?  @relation("TopVendor", fields: [topVendorId], references: [id])
+
+  @@map("analytics_snapshots")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SENIOR_MANAGER
+  DIRECTOR
+  PROCUREMENT_OFFICER
+  EMPLOYEE
+  VENDOR
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum EmployeeType {
+  FULL_TIME
+  CONTRACT
+  INTERN
+}
+
+enum VendorCategory {
+  IT_HARDWARE
+  IT_SOFTWARE
+  OFFICE_SUPPLIES
+  FURNITURE
+  SERVICES
+  RAW_MATERIALS
+  MAINTENANCE
+  LOGISTICS
+  MARKETING
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PRStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CLARIFICATION_REQUESTED
+  RFQ_CREATED
+  PO_GENERATED
+  COMPLETED
+  CANCELLED
+}
+
+enum ApprovalType {
+  PR_APPROVAL
+  VENDOR_SELECTION
+  PO_APPROVAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CLARIFICATION_REQUESTED
+}
+
+enum RFQStatus {
+  DRAFT
+  PUBLISHED
+  QUOTATION_RECEIVED
+  UNDER_REVIEW
+  VENDOR_SELECTED
+  APPROVED
+  REJECTED
+  CLOSED
+  CANCELLED
+}
+
+enum RFQVendorStatus {
+  INVITED
+  VIEWED
+  QUOTED
+  DECLINED
+  SELECTED
+  REJECTED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum POStatus {
+  DRAFT
+  ISSUED
+  ACKNOWLEDGED
+  IN_TRANSIT
+  DELIVERED
+  PARTIALLY_DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum GoodsCondition {
+  GOOD
+  DAMAGED
+  PARTIAL_DAMAGE
+}
+
+enum GRStatus {
+  RECEIVED
+  PARTIALLY_RECEIVED
+  REJECTED
+  UNDER_INSPECTION
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+}
+
+enum MatchStatus {
+  MATCHED
+  QUANTITY_MISMATCH
+  PRICE_MISMATCH
+  TAX_MISMATCH
+  MULTIPLE_MISMATCHES
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CHEQUE
+  UPI
+  NEFT
+  RTGS
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  APPROVAL_REQUIRED
+  RFQ_PUBLISHED
+  QUOTATION_SUBMITTED
+  PO_GENERATED
+  INVOICE_GENERATED
+  PAYMENT_COMPLETED
+  RISK_ALERT
+  SYSTEM
+  INFO
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActivityAction {
+  CREATED
+  UPDATED
+  DELETED
+  APPROVED
+  REJECTED
+  SUBMITTED
+  PUBLISHED
+  GENERATED
+  DOWNLOADED
+  EMAILED
+  LOGIN
+  LOGOUT
+}
+
+enum RiskType {
+  VENDOR_FAVORITISM
+  PRICE_ANOMALY
+  DELIVERY_DELAY
+  INVOICE_MISMATCH
+  UNDERPERFORMING_VENDOR
+  SUSPICIOUS_PATTERN
+  CONCENTRATION_RISK
+}
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
